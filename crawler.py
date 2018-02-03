@@ -9,7 +9,7 @@ db = Store("listings.json")
 slack = SlackConn(os.environ["SLACK_TOKEN"])
 
 from_time = datetime.now() - timedelta(hours=1)
-cl_h = CraigslistHousing(site='losangeles', filters={'max_price': 3000})
+cl_h = CraigslistHousing(site='losangeles', category="apa",  filters={'max_price': 3000})
 boxes = [[(-118.488483356,33.8709965384),
           (-118.3696936831,34.0313337674)]]
 
