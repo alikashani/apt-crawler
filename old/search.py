@@ -1,4 +1,3 @@
-from urllib.parse import urlparse, parse_qs
 from urllib.request import urlopen
 from queue import Queue
 from bs4 import BeautifulSoup
@@ -18,13 +17,13 @@ class SearchResults(object):
     TOTALCOUNT_CLASS = 'totalcount'
     NEXT_CLASS = 'next'
 
-    def __init__(self, queue, db_name, link='https://losangeles.craigslist.org/search/wst/apa?sort=date&availabilityMode=0&max_price=3000'):
+    def __init__(self, queue, db_name, link):
         self.queue = queue
         self.link = link
         self.min_time = datetime.now() - timedelta(1)
         self.conn = sqlite3.connect(db_name)
         self.conn.execute('''CREATE TABLE IF NOT EXISTS listings
-             (id integer primary key, title text, time text, link text, price real)''')
+             (id integer primary key, title text, time text, link text, price integer)''')
 
     def run(self):
         page = urlopen(self.link)
@@ -38,16 +37,24 @@ class SearchResults(object):
 
     def get_info(self, soup):
         for row in soup.find_all("li", {"class", self.RESULTROW_CLASS}):
-            id = int(row["data-pid"])
-            time = row.find("time", {"class", self.RESULTDATE_CLASS})['datetime']
-            title_info = row.find("a", {"class", self.RESULTTITLE_CLASS})
-            link = title_info['href']
-            title = title_info.text
-            price = int(row.find("span", {"class", self.RESULTPRICE_CLASS}).text[1:])
-            if self.to_datetime(time) > self.min_time:
-                self.save(id, title, time, link, price)
-    
+            try:
+                id = int(row["data-pid"])
+                time = row.find("time", {"class", self.RESULTDATE_CLASS})['datetime']
+                title_info = row.find("a", {"class", self.RESULTTITLE_CLASS})
+                link = title_info['href']
+                title = title_info.text
+                price = int(row.find("span", {"class", self.RESULTPRICE_CLASS}).text[1:])
+                # save this for the time req
+                self.last_seen_dt = self.to_datetime(time)
+                if self.last_seen_dt > self.min_time:
+                    self.queue.put((id, title, time, link, price))
+            except Exception as e:
+                print("ehhhh...", e)
+
     def has_next(self, soup):
+        # Time Req
+        if self.last_seen_dt < self.min_time:
+            return False
         try:
             range_to = soup.find("span", {"class", self.RANGETO_CLASS}).text
             total = soup.find("span", {"class", self.TOTALCOUNT_CLASS}).text
@@ -56,7 +63,6 @@ class SearchResults(object):
                 return True
         except:
             print("Done...")
-
         return False
 
     def to_datetime(self, time):
@@ -65,8 +71,10 @@ class SearchResults(object):
     def save(self):
         pass
 
+
+
 if __name__ == "__main__":
     queue = Queue()
-    s = SearchResults(queue, 'apts.db')
+    s = SearchResults(queue, 'apts.db', 'https://losangeles.craigslist.org/search/wst/apa?sort=date&availabilityMode=0&max_price=3000')
     s.run()
     
